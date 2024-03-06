@@ -1,0 +1,337 @@
+C51 COMPILER V9.57.0.0   MAIN                                                              03/05/2024 23:30:03 PAGE 1   
+
+
+C51 COMPILER V9.57.0.0, COMPILATION OF MODULE MAIN
+OBJECT MODULE PLACED IN .\Objects\main.obj
+COMPILER INVOKED BY: D:\Keli51\C51\BIN\C51.EXE main.c OPTIMIZE(8,SPEED) BROWSE DEBUG OBJECTEXTEND PRINT(.\Listings\main.
+                    -lst) TABS(2) OBJECT(.\Objects\main.obj)
+
+line level    source
+
+   1          #include <STC15F2K60S2.H>
+   2          #include "iic.h"
+   3          #include "ds1302.h"
+   4          #include "onewire.h"
+   5          #include "smg.h"
+   6          
+   7          sbit r3=P3^2;sbit r4=P3^3;
+   8          sbit c1=P4^4;sbit c2=P4^2;
+   9          unsigned int count_f;
+  10          unsigned char led_stat=0xff, count_t, dp_mode=1, memo_dp_mode, back_mode=1, max_temp, max_wet, now_temp, n
+             -ow_wet, before_temp, before_wet, times=0, hour, min, sec, last_hour, last_min, set_temp=30;
+  11          float avr_temp, avr_wet;
+  12          
+  13          void init_timer()
+  14          {
+  15   1        TMOD=0x06;
+  16   1        AUXR&=0x3f;
+  17   1        EA=1;
+  18   1        ET0=1;
+  19   1        ET1=1;
+  20   1        TH0=255;
+  21   1        TL0=255;
+  22   1        TH1=(65535-50000)/256;
+  23   1        TL1=(65535-50000)%256;
+  24   1        TR0=0;
+  25   1        TR1=1;
+  26   1      }
+  27          void get_time()
+  28          {
+  29   1        hour=hour_read();
+  30   1        min=min_read();
+  31   1        sec=sec_read();
+  32   1      }
+  33          void service_t0() interrupt 1
+  34          {
+  35   1        ++count_f;
+  36   1      }
+  37          void service_t1() interrupt 3
+  38          {
+  39   1        ++count_t;
+  40   1        if(count_t%10==0&&dp_mode==1)
+  41   1        {
+  42   2          get_time();
+  43   2        }
+  44   1        if(count_t%5==0&&dp_mode!=4)
+  45   1        {
+  46   2          if(AD_read()<20)
+  47   2          {
+  48   3            count_f=0;
+  49   3            TR0=1;
+  50   3            count_t=0;    
+  51   3            memo_dp_mode=dp_mode; 
+  52   3            dp_mode=4;
+  53   3            last_hour=hour_read();
+C51 COMPILER V9.57.0.0   MAIN                                                              03/05/2024 23:30:03 PAGE 2   
+
+  54   3            last_min=min_read();
+  55   3            before_temp=now_temp; 
+  56   3            now_temp=readtemp();    
+  57   3            if(now_temp>max_temp)
+  58   3              max_temp=now_temp;
+  59   3            avr_temp=1.0*(now_temp+avr_temp*times)/(times+1);
+  60   3          }
+  61   2        }
+  62   1        if(count_t==20&&dp_mode==4)
+  63   1        {
+  64   2          TR0=0;
+  65   2          if(count_f<200||count_f>2000)
+  66   2            now_wet=0;
+  67   2          else
+  68   2          { 
+  69   3            before_wet=now_wet;
+  70   3            now_wet=0.044*count_f+1.2;
+  71   3            if(now_wet>max_wet)
+  72   3              max_wet=now_wet;
+  73   3            avr_wet=1.0*(now_wet+avr_wet*times)/(times+1);
+  74   3          } 
+  75   2        }
+  76   1        if(count_t==60&&dp_mode==4)
+  77   1        {
+  78   2          ++times;
+  79   2          dp_mode=memo_dp_mode;
+  80   2        }
+  81   1        if(count_t==0xff)
+  82   1          count_t=0;
+  83   1      }
+  84          void led()
+  85          {
+  86   1        if(dp_mode==1)
+  87   1          led_stat=led_stat&0xfe;
+  88   1        else
+  89   1          led_stat=(led_stat&0xfe)|0x01;
+  90   1        if(dp_mode==2)
+  91   1          led_stat=led_stat&0xfd;
+  92   1        else
+  93   1          led_stat=(led_stat&0xfd)|0x02;
+  94   1        if(dp_mode==4)
+  95   1          led_stat=led_stat&0xfb;
+  96   1        else
+  97   1          led_stat=(led_stat&0xfb)|0x04;
+  98   1        if(now_temp>set_temp)
+  99   1        {
+ 100   2          if(count_t%2==0)
+ 101   2            led_stat=(led_stat|0x08)&((~led_stat)|0xf7);
+ 102   2        }
+ 103   1        else
+ 104   1          led_stat=(led_stat&0xf7)|0x08;
+ 105   1        if(now_wet==1)
+ 106   1          led_stat=led_stat&0xef;
+ 107   1        else
+ 108   1          led_stat=(led_stat&0xef)|0x10;
+ 109   1        if(times>=2&&before_temp<now_temp&&before_wet<now_wet)
+ 110   1          led_stat=led_stat&0xdf;
+ 111   1        else
+ 112   1          led_stat=(led_stat&0xdf)|0x20;
+ 113   1        latch(4,led_stat);
+ 114   1      }
+ 115          void display()
+C51 COMPILER V9.57.0.0   MAIN                                                              03/05/2024 23:30:03 PAGE 3   
+
+ 116          {
+ 117   1        unsigned int temp;
+ 118   1        led();
+ 119   1        switch(dp_mode)
+ 120   1        {
+ 121   2          case 1:
+ 122   2            smg(1,hour/10);
+ 123   2            smg(2,hour%10);
+ 124   2            smg(3,16);
+ 125   2            smg(4,min/10);
+ 126   2            smg(5,min%10);
+ 127   2            smg(6,16);
+ 128   2            smg(7,sec/10);
+ 129   2            smg(8,sec%10);
+ 130   2            break;
+ 131   2          case 2:
+ 132   2            if(back_mode==1)
+ 133   2            {
+ 134   3              smg(1,11);
+ 135   3              if(times)
+ 136   3              {
+ 137   4                temp=avr_temp*10;     
+ 138   4                smg(3,max_temp/10);
+ 139   4                smg(4,max_temp%10);
+ 140   4                smg(5,16);
+ 141   4                smg(6,temp/100);
+ 142   4                smg_p(7,(temp/10)%10);
+ 143   4                smg(8,temp%10);
+ 144   4              }
+ 145   3            }
+ 146   2            else
+ 147   2              if(back_mode==2)
+ 148   2              {
+ 149   3                smg(1,15);
+ 150   3                if(times)
+ 151   3                {
+ 152   4                  temp=avr_wet*10;      
+ 153   4                  smg(3,max_wet/10);
+ 154   4                  smg(4,max_wet%10);
+ 155   4                  smg(5,16);
+ 156   4                  smg(6,temp/100);
+ 157   4                  smg_p(7,(temp/10)%10);
+ 158   4                  smg(8,temp%10);
+ 159   4                }
+ 160   3              }
+ 161   2            else
+ 162   2              if(back_mode==3)
+ 163   2              {
+ 164   3                smg(1,13);
+ 165   3                smg(2,times/10);
+ 166   3                smg(3,times%10);
+ 167   3                if(times)
+ 168   3                {
+ 169   4                  smg(4,last_hour/10);
+ 170   4                  smg(5,last_hour%10);
+ 171   4                  smg(6,16);
+ 172   4                  smg(7,last_min/10);
+ 173   4                  smg(8,last_min%10);
+ 174   4                }
+ 175   3              }
+ 176   2              break;
+ 177   2          case 3:
+C51 COMPILER V9.57.0.0   MAIN                                                              03/05/2024 23:30:03 PAGE 4   
+
+ 178   2            smg(1,14);
+ 179   2            smg(7,set_temp/10);
+ 180   2            smg(8,set_temp%10);
+ 181   2            break;
+ 182   2          case 4:
+ 183   2            smg(1,12);
+ 184   2            smg(4,now_temp/10);
+ 185   2            smg(5,now_temp%10);
+ 186   2            smg(6,16);
+ 187   2            if(now_wet==0)
+ 188   2            {
+ 189   3              smg(7,10);
+ 190   3              smg(8,10);
+ 191   3            }
+ 192   2            else
+ 193   2            {
+ 194   3              smg(7,now_wet/10);
+ 195   3              smg(8,now_wet%10);
+ 196   3            }
+ 197   2            break;      
+ 198   2        }
+ 199   1        latch(7,0xff);
+ 200   1      }
+ 201          void Delay10ms()    //@12.000MHz
+ 202          {
+ 203   1        unsigned char i, j;
+ 204   1        i = 117;
+ 205   1        j = 184;
+ 206   1        do
+ 207   1        {
+ 208   2          while (--j);
+ 209   2        } while (--i);
+ 210   1      }
+ 211          void scan()
+ 212          {
+ 213   1        r4=0;
+ 214   1        r3=c1=c2=1;
+ 215   1        if(c1==0)
+ 216   1        {
+ 217   2          Delay10ms();
+ 218   2          if(c1==0)
+ 219   2          {
+ 220   3            if(dp_mode<3) 
+ 221   3              ++dp_mode;
+ 222   3            else
+ 223   3              dp_mode=1;
+ 224   3            if(dp_mode==2)
+ 225   3              back_mode=1;
+ 226   3            while(c1==0)
+ 227   3              display();
+ 228   3          }
+ 229   2        }
+ 230   1        r3=0;
+ 231   1        r4=c1=c2=1;
+ 232   1        if(c1==0&&dp_mode==2)
+ 233   1        {
+ 234   2          Delay10ms();
+ 235   2          if(c1==0)
+ 236   2          {
+ 237   3            if(back_mode<3) 
+ 238   3              ++back_mode;
+ 239   3            else
+C51 COMPILER V9.57.0.0   MAIN                                                              03/05/2024 23:30:03 PAGE 5   
+
+ 240   3              back_mode=1;
+ 241   3            while(c1==0)
+ 242   3              display();
+ 243   3          }
+ 244   2        }
+ 245   1        r4=0;
+ 246   1        r3=c1=c2=1;
+ 247   1        if(c2==0&&dp_mode==3)
+ 248   1        {
+ 249   2          Delay10ms();
+ 250   2          if(c2==0)
+ 251   2          {
+ 252   3            ++set_temp;
+ 253   3            while(c2==0)
+ 254   3              display();
+ 255   3          }
+ 256   2        }
+ 257   1        r3=0;
+ 258   1        r4=c1=c2=1;
+ 259   1        if(c2==0&&dp_mode==3)
+ 260   1        {
+ 261   2          Delay10ms();
+ 262   2          if(c2==0)
+ 263   2          {
+ 264   3            --set_temp;
+ 265   3            while(c2==0)
+ 266   3              display();
+ 267   3          }
+ 268   2        }
+ 269   1        if(c2==0&&dp_mode==2&&back_mode==3)
+ 270   1        {
+ 271   2            Delay10ms();
+ 272   2            if(c2==0)
+ 273   2            {
+ 274   3              count_t=0;      
+ 275   3              while(c2==0)
+ 276   3              {
+ 277   4                display();
+ 278   4                if(count_t>40)
+ 279   4                {
+ 280   5                  now_temp=now_wet=before_temp=before_wet=max_temp=max_wet=times=avr_temp=avr_wet=0;
+ 281   5                }
+ 282   4              }
+ 283   3            }
+ 284   2        }
+ 285   1      }
+ 286          void set()
+ 287          {
+ 288   1        latch(4,0xff);
+ 289   1        latch(5,0x00);
+ 290   1      }
+ 291          void main()
+ 292          {
+ 293   1        set();
+ 294   1        init_ds1302();
+ 295   1        init_timer();
+ 296   1        while(1)
+ 297   1        {
+ 298   2          if(dp_mode!=4)
+ 299   2            scan();
+ 300   2          display();
+ 301   2        }
+C51 COMPILER V9.57.0.0   MAIN                                                              03/05/2024 23:30:03 PAGE 6   
+
+ 302   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   1453    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =     28       2
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)
