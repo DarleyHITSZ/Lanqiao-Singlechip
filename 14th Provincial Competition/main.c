@@ -48,20 +48,21 @@ void service_t1() interrupt 3
 			count_f=0;
 			TR0=1;
 			count_t=0;		
+			readtemp();
 			memo_dp_mode=dp_mode;	
 			dp_mode=4;
 			last_hour=hour_read();
-			last_min=min_read();
-			before_temp=now_temp;	
-			now_temp=readtemp();		
-			if(now_temp>max_temp)
-				max_temp=now_temp;
-			avr_temp=1.0*(now_temp+avr_temp*times)/(times+1);
+			last_min=min_read();			
 		}
 	}
 	if(count_t==20&&dp_mode==4)
 	{
 		TR0=0;
+		before_temp=now_temp;	
+		now_temp=readtemp();		
+		if(now_temp>max_temp)
+			max_temp=now_temp;
+		avr_temp=1.0*(now_temp+avr_temp*times)/(times+1);	
 		if(count_f<200||count_f>2000)
 			now_wet=0;
 		else
