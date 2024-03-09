@@ -1,0 +1,342 @@
+C51 COMPILER V9.57.0.0   MAIN                                                              03/09/2024 21:35:30 PAGE 1   
+
+
+C51 COMPILER V9.57.0.0, COMPILATION OF MODULE MAIN
+OBJECT MODULE PLACED IN .\Objects\main.obj
+COMPILER INVOKED BY: D:\Keli51\C51\BIN\C51.EXE main.c OPTIMIZE(8,SPEED) BROWSE DEBUG OBJECTEXTEND PRINT(.\Listings\main.
+                    -lst) TABS(2) OBJECT(.\Objects\main.obj)
+
+line level    source
+
+   1          #include <STC15F2K60S2.H>
+   2          #include "iic.h"
+   3          #include "smg.h"
+   4          
+   5          unsigned char pwd[6]={8,8,8,8,8,8}, now_pwd[6]=0;
+   6          unsigned char now_pwd_ws=0, dp_mode=0, count_t=0, i, led_stat=0xff;
+   7          sbit r1=P3^0; sbit r2=P3^1; sbit r3=P3^2; sbit r4=P3^3;
+   8          sbit c1=P4^4; sbit c2=P4^2; sbit c3=P3^5; sbit c4=P3^4;
+   9          void init_timer0()
+  10          {
+  11   1        TMOD=0x00;
+  12   1        AUXR&=0x3f;
+  13   1        EA=1;
+  14   1        ET0=1;
+  15   1        TH0=(65535-50000)/256;
+  16   1        TL0=(65535-50000)%256;
+  17   1        TR0=1;
+  18   1      }
+  19          void init_stat()
+  20          {
+  21   1        latch(4,0xff);
+  22   1        latch(5,0x00);
+  23   1        latch(7,0xff);
+  24   1      }
+  25          void servicet0() interrupt 1
+  26          {
+  27   1        unsigned char judge;
+  28   1        if(dp_mode==1||dp_mode==2) ++count_t;
+  29   1        if(dp_mode==1&&now_pwd_ws==6&&(led_stat&0x01)==0x01)
+  30   1        {
+  31   2          judge=1;
+  32   2          for(i=0;i<6;i++)
+  33   2            if(pwd[i]!=now_pwd[i])
+  34   2            {
+  35   3              judge=0;
+  36   3              break;
+  37   3            }
+  38   2          if(judge)
+  39   2          {
+  40   3            latch(5,0x10);
+  41   3            now_pwd_ws=0;
+  42   3            dp_mode=2;
+  43   3          }
+  44   2          else
+  45   2          {
+  46   3            led_stat&=0xfe;
+  47   3          }
+  48   2          count_t=0;
+  49   2        }
+  50   1        if(count_t==100)
+  51   1        {
+  52   2          if((led_stat&0x01)==0x00)
+  53   2          {
+  54   3            now_pwd_ws=0;
+C51 COMPILER V9.57.0.0   MAIN                                                              03/09/2024 21:35:30 PAGE 2   
+
+  55   3            dp_mode=0;
+  56   3            led_stat=(led_stat&0xfe)|0x01;  
+  57   3          }
+  58   2          if(dp_mode==2)
+  59   2          {     
+  60   3            dp_mode=0;
+  61   3            now_pwd_ws=0; 
+  62   3          }
+  63   2        } 
+  64   1        if(count_t==0xff)
+  65   1          count_t=0;
+  66   1      }
+  67          void led()
+  68          {
+  69   1        if(dp_mode==1)
+  70   1          led_stat=led_stat&0xbf;
+  71   1        else
+  72   1          led_stat=(led_stat&0xbf)|0x40;
+  73   1        if(dp_mode==3)
+  74   1          led_stat=led_stat&0x7f;
+  75   1        else
+  76   1          led_stat=(led_stat&0x7f)|0x80;
+  77   1        latch(4,led_stat);
+  78   1      }
+  79          void display()
+  80          {
+  81   1        led();
+  82   1        switch(dp_mode)
+  83   1        {
+  84   2          case 0:
+  85   2            init_stat();
+  86   2            break;
+  87   2          case 1:
+  88   2            smg(1,10);
+  89   2            for(i=8;i>(8-now_pwd_ws);i--)
+  90   2            {
+  91   3              smg(i,now_pwd[i-9+now_pwd_ws]);
+  92   3            }
+  93   2            break;
+  94   2          case 2:
+  95   2            smg(1,0);
+  96   2            smg(5,0);
+  97   2            smg(6,12);
+  98   2            smg(7,13);
+  99   2            smg(8,14);
+ 100   2            break;
+ 101   2          case 3:
+ 102   2            smg(1,11);
+ 103   2            for(i=8;i>(8-now_pwd_ws);i--)
+ 104   2            {
+ 105   3              smg(i,now_pwd[i-9+now_pwd_ws]);
+ 106   3            }
+ 107   2            break;
+ 108   2        }
+ 109   1        latch(7,0xff);
+ 110   1      }
+ 111          void setpwd()
+ 112          {
+ 113   1        for(i=0;i<6;i++)
+ 114   1          pwd[i]=now_pwd[i];
+ 115   1        for(i=0;i<6;i++)
+ 116   1          AT_write(i,now_pwd[i]);
+C51 COMPILER V9.57.0.0   MAIN                                                              03/09/2024 21:35:30 PAGE 3   
+
+ 117   1      }
+ 118          void Delay10ms()    //@12.000MHz
+ 119          {
+ 120   1        unsigned char i, j;
+ 121   1        i = 117;
+ 122   1        j = 184;
+ 123   1        do
+ 124   1        {
+ 125   2          while (--j);
+ 126   2        } while (--i);
+ 127   1      }
+ 128          
+ 129          void scan()
+ 130          {
+ 131   1        if((dp_mode==1||dp_mode==3)&&now_pwd_ws<6)
+ 132   1        {
+ 133   2          r1=0;
+ 134   2          r2=r3=r4=c1=c2=c3=c4=1;
+ 135   2          if(c1==0)
+ 136   2          {
+ 137   3            Delay10ms();
+ 138   3            if(c1==0)
+ 139   3            {
+ 140   4              now_pwd[(++now_pwd_ws)-1]=0;
+ 141   4              while(c1==0)
+ 142   4                display();
+ 143   4            }
+ 144   3          }
+ 145   2          if(c2==0)
+ 146   2          {
+ 147   3            Delay10ms();
+ 148   3            if(c2==0)
+ 149   3            {
+ 150   4              now_pwd[(++now_pwd_ws)-1]=1;
+ 151   4              while(c2==0)
+ 152   4                display();
+ 153   4            }
+ 154   3          }
+ 155   2          if(c3==0)
+ 156   2          {
+ 157   3            Delay10ms();
+ 158   3            if(c3==0)
+ 159   3            {
+ 160   4              now_pwd[(++now_pwd_ws)-1]=2;
+ 161   4              while(c3==0)
+ 162   4                display();
+ 163   4            }
+ 164   3          }
+ 165   2          if(c4==0)
+ 166   2          {
+ 167   3            Delay10ms();
+ 168   3            if(c4==0)
+ 169   3            {
+ 170   4              now_pwd[(++now_pwd_ws)-1]=3;
+ 171   4              while(c4==0)
+ 172   4                display();
+ 173   4            }
+ 174   3          }
+ 175   2          
+ 176   2          r2=0;
+ 177   2          r1=r3=r4=c1=c2=c3=c4=1;
+ 178   2          if(c1==0)
+C51 COMPILER V9.57.0.0   MAIN                                                              03/09/2024 21:35:30 PAGE 4   
+
+ 179   2          {
+ 180   3            Delay10ms();
+ 181   3            if(c1==0)
+ 182   3            {
+ 183   4              now_pwd[(++now_pwd_ws)-1]=4;
+ 184   4              while(c1==0)
+ 185   4                display();
+ 186   4            }
+ 187   3          }
+ 188   2          if(c2==0)
+ 189   2          {
+ 190   3            Delay10ms();
+ 191   3            if(c2==0)
+ 192   3            {
+ 193   4              now_pwd[(++now_pwd_ws)-1]=5;
+ 194   4              while(c2==0)
+ 195   4                display();
+ 196   4            }
+ 197   3          }
+ 198   2          if(c3==0)
+ 199   2          {
+ 200   3            Delay10ms();
+ 201   3            if(c3==0)
+ 202   3            {
+ 203   4              now_pwd[(++now_pwd_ws)-1]=6;
+ 204   4              while(c3==0)
+ 205   4                display();
+ 206   4            }
+ 207   3          }
+ 208   2          if(c4==0)
+ 209   2          {
+ 210   3            Delay10ms();
+ 211   3            if(c4==0)
+ 212   3            {
+ 213   4              now_pwd[(++now_pwd_ws)-1]=7;
+ 214   4              while(c4==0)
+ 215   4                display();
+ 216   4            }
+ 217   3          }
+ 218   2          
+ 219   2          r3=0;
+ 220   2          r1=r2=r4=c1=c2=c3=c4=1;
+ 221   2          if(c1==0)
+ 222   2          {
+ 223   3            Delay10ms();
+ 224   3            if(c1==0)
+ 225   3            {
+ 226   4              now_pwd[(++now_pwd_ws)-1]=8;
+ 227   4              while(c1==0)
+ 228   4                display();
+ 229   4            }
+ 230   3          }
+ 231   2          if(c2==0)
+ 232   2          {
+ 233   3            Delay10ms();
+ 234   3            if(c2==0)
+ 235   3            {
+ 236   4              now_pwd[(++now_pwd_ws)-1]=9;
+ 237   4              while(c2==0)
+ 238   4                display();
+ 239   4            }
+ 240   3          }
+C51 COMPILER V9.57.0.0   MAIN                                                              03/09/2024 21:35:30 PAGE 5   
+
+ 241   2        }
+ 242   1        
+ 243   1        r4=0;
+ 244   1        r1=r2=r3=c1=c2=c3=c4=1;
+ 245   1        if(c2==0&&(dp_mode==1||dp_mode==3)&&((led_stat&0x01)==0x01))
+ 246   1        {
+ 247   2          Delay10ms();
+ 248   2          if(c2==0)
+ 249   2          {
+ 250   3            now_pwd_ws=0;
+ 251   3            while(c2==0)
+ 252   3              display();
+ 253   3          }
+ 254   2        }
+ 255   1        if(c3==0&&(dp_mode==2||dp_mode==3))
+ 256   1        {
+ 257   2          Delay10ms();
+ 258   2          if(c3==0)
+ 259   2          {
+ 260   3            if(dp_mode==2)
+ 261   3              dp_mode=3;
+ 262   3            if(now_pwd_ws==6&&dp_mode==3)
+ 263   3            {
+ 264   4              setpwd();
+ 265   4              now_pwd_ws=0;
+ 266   4              dp_mode=2;
+ 267   4              count_t=0;
+ 268   4            }
+ 269   3            while(c3==0)
+ 270   3              display();
+ 271   3          }
+ 272   2        }
+ 273   1        if(c4==0&&dp_mode==0)
+ 274   1        {
+ 275   2          Delay10ms();
+ 276   2          if(c4==0)
+ 277   2          {
+ 278   3            dp_mode=1;
+ 279   3            while(c4==0)
+ 280   3              display();
+ 281   3          }
+ 282   2        }
+ 283   1      }
+ 284          void init_pwd()
+ 285          {
+ 286   1        if(AT_read(0x08)==0)
+ 287   1        {
+ 288   2          for(i=0;i<6;i++)
+ 289   2            AT_write(i,pwd[i]);
+ 290   2          AT_write(0x08,0x01);
+ 291   2        }
+ 292   1        else
+ 293   1        {
+ 294   2          for(i=0;i<6;i++)
+ 295   2            pwd[i]=AT_read(i);
+ 296   2        }
+ 297   1      }
+ 298          void main()
+ 299          {
+ 300   1        init_stat();
+ 301   1        init_timer0();
+ 302   1        init_pwd();
+C51 COMPILER V9.57.0.0   MAIN                                                              03/09/2024 21:35:30 PAGE 6   
+
+ 303   1        while(1)
+ 304   1        {
+ 305   2            scan();
+ 306   2            display();
+ 307   2        }
+ 308   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   1019    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =     17    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)
