@@ -1,0 +1,69 @@
+C51 COMPILER V9.57.0.0   ULWAVE                                                            05/22/2024 18:28:39 PAGE 1   
+
+
+C51 COMPILER V9.57.0.0, COMPILATION OF MODULE ULWAVE
+OBJECT MODULE PLACED IN .\Objects\ulwave.obj
+COMPILER INVOKED BY: D:\Keli51\C51\BIN\C51.EXE ulwave.c OPTIMIZE(8,SPEED) BROWSE DEBUG OBJECTEXTEND PRINT(.\Listings\ulw
+                    -ave.lst) TABS(2) OBJECT(.\Objects\ulwave.obj)
+
+line level    source
+
+   1          #include <STC15F2K60S2.H>
+   2          #include <intrins.h>
+   3          
+   4          sbit TX=P1^0;
+   5          sbit RX=P1^1;
+   6          
+   7          void Delay12us()    //@12.000MHz
+   8          {
+   9   1        unsigned char i;
+  10   1      
+  11   1        _nop_();
+  12   1        _nop_();
+  13   1        i = 33;
+  14   1        while (--i);
+  15   1      }
+  16          
+  17          void init_utwave()
+  18          {
+  19   1          TX=1;
+  20   1          Delay12us();
+  21   1          TX=0;
+  22   1      }
+  23          
+  24          unsigned int data_utwave()
+  25          {
+  26   1        unsigned int time;
+  27   1        TH1=0;TL1=0;
+  28   1        init_utwave();
+  29   1        TR1=1;
+  30   1        while((RX==1)&&(TF1==0));
+  31   1        TR1=0;
+  32   1        if(TF1==0)
+  33   1        {
+  34   2          time=TH1;
+  35   2          time=(time<<8)|TL1;
+  36   2          return 1.0*time*0.017;
+  37   2        }
+  38   1        else
+  39   1        {
+  40   2          TF1=0;
+  41   2          return 0;
+  42   2        }
+  43   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =     70    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+C51 COMPILER V9.57.0.0   ULWAVE                                                            05/22/2024 18:28:39 PAGE 2   
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

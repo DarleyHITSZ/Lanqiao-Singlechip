@@ -1,0 +1,1 @@
+"ulwave.c" OPTIMIZE (8,SPEED) BROWSE DEBUG OBJECTEXTEND PRINT(.\Listings\ulwave.lst) TABS (2) OBJECT(.\Objects\ulwave.obj)

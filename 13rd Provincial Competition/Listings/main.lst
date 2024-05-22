@@ -1,0 +1,245 @@
+C51 COMPILER V9.57.0.0   MAIN                                                              04/11/2024 21:25:43 PAGE 1   
+
+
+C51 COMPILER V9.57.0.0, COMPILATION OF MODULE MAIN
+OBJECT MODULE PLACED IN .\Objects\main.obj
+COMPILER INVOKED BY: D:\Keli51\C51\BIN\C51.EXE main.c OPTIMIZE(8,SPEED) BROWSE DEBUG OBJECTEXTEND PRINT(.\Listings\main.
+                    -lst) TABS(2) OBJECT(.\Objects\main.obj)
+
+line level    source
+
+   1          #include <STC15F2K60S2.H>
+   2          #include "ds1302.h"
+   3          #include "onewire.h"
+   4          #include "smg.h"
+   5          
+   6          sbit r3=P3^2;sbit r4=P3^3;
+   7          sbit c3=P3^5;sbit c4=P3^4;
+   8          float now_temp;
+   9          unsigned char wk_mode=0, dp_mode=1, hour=7, min=59, sec=0, set_temp=23, cnt=0, blink=0;
+  10          unsigned char relay_stat=0, old_relay_stat=0, led_stat=0xff, old_led_stat=0xff;
+  11          void init_timer0()
+  12          {
+  13   1        AUXR&=0x3f;
+  14   1        TMOD=0x00;
+  15   1        EA=1;
+  16   1        ET0=1;
+  17   1        TH0=(65535-50000)/256;
+  18   1        TL0=(65535-50000)%256;
+  19   1        TR0=1;
+  20   1      }
+  21          void relay_check()
+  22          {
+  23   1        if(wk_mode==0)
+  24   1        {
+  25   2          if(now_temp>set_temp)
+  26   2            relay_stat=1;
+  27   2          else
+  28   2            relay_stat=0;
+  29   2        }
+  30   1        else
+  31   1        {
+  32   2          if(min==0&&sec==0)
+  33   2            relay_stat=1;
+  34   2          else
+  35   2            if(min==0&&sec>=1&&sec<=5&&relay_stat==1)
+  36   2              relay_stat=1;
+  37   2            else
+  38   2              relay_stat=0;
+  39   2        }
+  40   1        if(old_relay_stat!=relay_stat)
+  41   1        {
+  42   2          if(relay_stat==1)
+  43   2            latch(5,0x10);
+  44   2          else
+  45   2            latch(5,0x00);
+  46   2          old_relay_stat=relay_stat;
+  47   2        }
+  48   1      }
+  49          void servicet0() interrupt 1
+  50          {
+  51   1        if(cnt!=0xff) 
+  52   1          ++cnt;
+  53   1        else
+  54   1          cnt=0;
+C51 COMPILER V9.57.0.0   MAIN                                                              04/11/2024 21:25:43 PAGE 2   
+
+  55   1        if(cnt%2==0)
+  56   1          sec=readsec();
+  57   1        if(sec==0)
+  58   1        {
+  59   2          min=readmin();
+  60   2          if(min==0)
+  61   2          {
+  62   3            hour=readhour();
+  63   3          }
+  64   2        }
+  65   1        if(cnt%20==0)
+  66   1        {
+  67   2          now_temp=readtemp();
+  68   2        }
+  69   1        relay_check();
+  70   1        if(relay_stat==0)
+  71   1          blink=0;
+  72   1        else
+  73   1          if(cnt%2==0&&relay_stat==1)
+  74   1            blink=!blink;
+  75   1      }
+  76          void led()
+  77          {
+  78   1        led_stat=0xff;
+  79   1        if(min==0&&sec>=0&&sec<=5)
+  80   1          led_stat&=0xfe;
+  81   1        if(wk_mode==0)
+  82   1          led_stat&=0xfd;
+  83   1        if(blink==1)
+  84   1          led_stat&=0xfb;
+  85   1        if(led_stat!=old_led_stat)
+  86   1        {
+  87   2          latch(4,led_stat);
+  88   2          old_led_stat=led_stat;
+  89   2        }
+  90   1      }
+  91          void display()
+  92          {
+  93   1        unsigned int stemp;
+  94   1        led();
+  95   1        switch(dp_mode)
+  96   1        {
+  97   2          case 1:
+  98   2            stemp=now_temp*10;
+  99   2            smg(1,10);
+ 100   2            smg(2,1);
+ 101   2            smg(6,stemp/100);
+ 102   2            smg_p(7,(stemp/10)%10);
+ 103   2            smg(8,stemp%10);
+ 104   2            break;
+ 105   2          case 2:
+ 106   2            smg(1,10);
+ 107   2            smg(2,2);
+ 108   2            smg(4,hour/10);
+ 109   2            smg(5,hour%10);
+ 110   2            smg(6,11);
+ 111   2            smg(7,min/10);
+ 112   2            smg(8,min%10);
+ 113   2            break;
+ 114   2          case 3:
+ 115   2            smg(1,10);
+ 116   2            smg(2,3);
+C51 COMPILER V9.57.0.0   MAIN                                                              04/11/2024 21:25:43 PAGE 3   
+
+ 117   2            smg(7,set_temp/10);
+ 118   2            smg(8,set_temp%10);
+ 119   2            break;
+ 120   2          case 4:
+ 121   2            smg(1,10);
+ 122   2            smg(2,2);
+ 123   2            smg(4,min/10);
+ 124   2            smg(5,min%10);
+ 125   2            smg(6,11);
+ 126   2            smg(7,sec/10);
+ 127   2            smg(8,sec%10);
+ 128   2            break;
+ 129   2        }
+ 130   1      }
+ 131          void Delay10ms()    //@12.000MHz
+ 132          {
+ 133   1        unsigned char i, j;
+ 134   1      
+ 135   1        i = 117;
+ 136   1        j = 184;
+ 137   1        do
+ 138   1        {
+ 139   2          while (--j);
+ 140   2        } while (--i);
+ 141   1      }
+ 142          void scan()
+ 143          {
+ 144   1        r4=0;
+ 145   1        r3=c3=c4=1;
+ 146   1        if(c3==0)
+ 147   1        {
+ 148   2          Delay10ms();
+ 149   2          if(c3==0)
+ 150   2          {
+ 151   3            if(dp_mode<3) 
+ 152   3              ++dp_mode;
+ 153   3            else 
+ 154   3              dp_mode=1;
+ 155   3            while(c3==0)
+ 156   3              display();
+ 157   3          }
+ 158   2        }
+ 159   1        if(c4==0&&dp_mode==3)
+ 160   1        {
+ 161   2          Delay10ms();
+ 162   2          if(c4==0)
+ 163   2          {
+ 164   3            if(set_temp<99)
+ 165   3              ++set_temp;
+ 166   3            while(c4==0)
+ 167   3              display();
+ 168   3          }
+ 169   2        }
+ 170   1        r3=0;
+ 171   1        r4=c3=c4=1;
+ 172   1        if(c3==0)
+ 173   1        {
+ 174   2          Delay10ms();
+ 175   2          if(c3==0)
+ 176   2          {
+ 177   3            wk_mode=wk_mode?0:1;
+ 178   3            relay_stat=0;
+C51 COMPILER V9.57.0.0   MAIN                                                              04/11/2024 21:25:43 PAGE 4   
+
+ 179   3            while(c3==0)
+ 180   3              display();
+ 181   3          }
+ 182   2        }
+ 183   1        if(c4==0&&dp_mode!=1)
+ 184   1        {
+ 185   2          Delay10ms();
+ 186   2          if(c4==0)
+ 187   2          {
+ 188   3            if(dp_mode==3&&set_temp>10)
+ 189   3              --set_temp;
+ 190   3            if(dp_mode==2)
+ 191   3              dp_mode=4;
+ 192   3            while(c4==0)
+ 193   3              display();
+ 194   3            if(dp_mode==4)
+ 195   3              dp_mode=2;
+ 196   3          }
+ 197   2        }
+ 198   1      }
+ 199          void set()
+ 200          {
+ 201   1        latch(4,0xff);
+ 202   1        latch(5,0x00);
+ 203   1      }
+ 204          void main()
+ 205          {
+ 206   1        set();
+ 207   1        readtemp();
+ 208   1        init_timer0();
+ 209   1        init_ds1302();
+ 210   1        while(1)
+ 211   1        {
+ 212   2          display();
+ 213   2          scan();
+ 214   2        }
+ 215   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    823    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =     16       2
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)
